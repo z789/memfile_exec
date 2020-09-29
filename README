@@ -1,0 +1,13 @@
+kernel v3.10.0上禁止内存文件执行的补丁
+
+目的：
+    1. 防止恶意软件创建内存文件执行恶意代码
+    2. 防止一些使用内存文件执行的加壳程序
+
+内存文件类型: tmpfs  proc ramfs devtmpfs
+    (memfd_create 系统调用创建的是tmpfs类型的)
+
+sysctl:
+    /proc/sys/kernel/memfile_exec 该文件控制是否允许内存文件执行。
+    0： 不允许 (默认值)
+    其他值: 允许

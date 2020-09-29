@@ -1,0 +1,69 @@
+diff -Nurp linux-3.10.0-1127.13.1.el7.x86_64.orig/fs/exec.c linux-3.10.0-1127.13.1.el7.x86_64/fs/exec.c
+--- linux-3.10.0-1127.13.1.el7.x86_64.orig/fs/exec.c	2020-09-29 16:17:17.056469914 +0800
++++ linux-3.10.0-1127.13.1.el7.x86_64/fs/exec.c	2020-09-29 21:57:32.397578030 +0800
+@@ -68,6 +68,7 @@
+ #include <trace/events/sched.h>
+ 
+ int suid_dumpable = 0;
++int memfile_exec = 0;
+ 
+ static LIST_HEAD(formats);
+ static DEFINE_RWLOCK(binfmt_lock);
+@@ -105,6 +106,19 @@ bool path_noexec(const struct path *path
+ 	       (path->mnt->mnt_sb->s_iflags & SB_I_NOEXEC);
+ }
+ 
++static int check_memfile_exec(struct file *f)
++{
++	struct file_system_type *f_type = file_inode(f)->i_sb->s_type;	
++
++	if (!memfile_exec && (!strcmp(f_type->name, "tmpfs")
++                              || !strcmp(f_type->name, "proc")
++                              || !strcmp(f_type->name, "ramfs")
++                              || !strcmp(f_type->name, "devtmpfs")))
++		return -1;
++
++	return 0;
++}
++
+ /*
+  * Note that a shared library must be both readable and executable due to
+  * security reasons.
+@@ -806,6 +820,9 @@ static struct file *do_open_exec(struct
+ 	if (path_noexec(&file->f_path))
+ 		goto exit;
+ 
++	if (check_memfile_exec(file) < 0)
++		goto exit;
++
+ 	fsnotify_open(file);
+ 
+ 	err = deny_write_access(file);
+diff -Nurp linux-3.10.0-1127.13.1.el7.x86_64.orig/include/linux/binfmts.h linux-3.10.0-1127.13.1.el7.x86_64/include/linux/binfmts.h
+--- linux-3.10.0-1127.13.1.el7.x86_64.orig/include/linux/binfmts.h	2020-09-29 16:17:16.496558900 +0800
++++ linux-3.10.0-1127.13.1.el7.x86_64/include/linux/binfmts.h	2020-09-29 16:42:41.541962504 +0800
+@@ -99,6 +99,7 @@ extern void setup_new_exec(struct linux_
+ extern void would_dump(struct linux_binprm *, struct file *);
+ 
+ extern int suid_dumpable;
++extern int memfile_exec;
+ 
+ /* Stack area protections */
+ #define EXSTACK_DEFAULT   0	/* Whatever the arch defaults to */
+diff -Nurp linux-3.10.0-1127.13.1.el7.x86_64.orig/kernel/sysctl.c linux-3.10.0-1127.13.1.el7.x86_64/kernel/sysctl.c
+--- linux-3.10.0-1127.13.1.el7.x86_64.orig/kernel/sysctl.c	2020-09-29 16:17:17.006477859 +0800
++++ linux-3.10.0-1127.13.1.el7.x86_64/kernel/sysctl.c	2020-09-29 16:59:45.601011967 +0800
+@@ -1210,6 +1210,13 @@ static struct ctl_table kern_table[] = {
+ 		.extra2         = &one,
+ 	},
+ #endif
++	{
++		.procname	= "memfile_exec",
++		.data		= &memfile_exec,
++		.maxlen		= sizeof(int),
++		.mode		= 0644,
++		.proc_handler	= proc_dointvec,
++	},
+ 	{ }
+ };
+ 
